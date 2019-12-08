@@ -21,7 +21,7 @@ func parseInput(s string) []int {
 	return ints
 }
 
-func main() {
+func day5() {
 	c := intcode.NewComputer(parseInput(day5Input))
 	c.Debug = true
 	output, err := c.RunWith(5)
@@ -31,6 +31,61 @@ func main() {
 	}
 	fmt.Println("Output:", output)
 	fmt.Println(c)
+}
+
+func day7Instance(phases ...int) (int, error) {
+	input := 0
+	for i, phase := range phases {
+		amp := intcode.NewComputer(parseInput(day7Input))
+		outputs, err := amp.RunWith(phase, input)
+		if err != nil {
+			return 0, fmt.Errorf("Amp %d: %v", i+1, err)
+		}
+		if len(outputs) != 1 {
+			return 0, fmt.Errorf("More than 1 output generated: %v", outputs)
+		}
+		input = outputs[0]
+	}
+	return input, nil
+}
+
+func permutations(xs []int) [][]int {
+	if len(xs) == 1 {
+		return [][]int{[]int{xs[0]}}
+	}
+	var cs [][]int
+	for i, x := range xs {
+		rest := make([]int, len(xs)-1)
+		copy(rest, xs[:i])
+		copy(rest[i:], xs[i+1:])
+		for _, comb := range permutations(rest) {
+			c := make([]int, len(comb)+1)
+			copy(c, comb)
+			c[len(comb)] = x
+			cs = append(cs, c)
+		}
+	}
+	return cs
+}
+
+func day7() {
+	fmt.Println(day7Instance(4, 3, 2, 1, 0))
+	fmt.Println(permutations([]int{1, 2, 3, 4}))
+	maxOutput := -1
+	for _, comb := range permutations([]int{0, 1, 2, 3, 4}) {
+		output, err := day7Instance(comb...)
+		if err != nil {
+			panic(err.Error())
+		}
+		if output > maxOutput {
+			maxOutput = output
+			fmt.Println("Part 1:", output, comb)
+		}
+	}
+}
+
+func main() {
+	day7()
 }
 
 const day2Input = `1,95,7,3,1,1,2,3,1,3,4,3,1,5,0,3,2,1,6,19,1,19,5,23,2,13,23,27,1,10,27,31,2,6,31,35,1,9,35,39,2,10,39,43,1,43,9,47,1,47,9,51,2,10,51,55,1,55,9,59,1,59,5,63,1,63,6,67,2,6,67,71,2,10,71,75,1,75,5,79,1,9,79,83,2,83,10,87,1,87,6,91,1,13,91,95,2,10,95,99,1,99,6,103,2,13,103,107,1,107,2,111,1,111,9,0,99,2,14,0,0`
