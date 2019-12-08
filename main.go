@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"brunokim.xyz/advent-of-code-2019/intcode"
 )
@@ -33,7 +34,7 @@ func day5() {
 	fmt.Println(c)
 }
 
-func day7Instance(phases ...int) (int, error) {
+func part1Instance(phases ...int) (int, error) {
 	input := 0
 	for i, phase := range phases {
 		amp := intcode.NewComputer(parseInput(day7Input))
@@ -68,18 +69,88 @@ func permutations(xs []int) [][]int {
 	return cs
 }
 
+type pipe struct {
+	id        int
+	lastInput int
+	ch        chan int
+}
+
+func newPipe(id int) *pipe {
+	return &pipe{
+		id:        id,
+		lastInput: -1,
+		ch:        make(chan int, 1),
+	}
+}
+
+func (p *pipe) NextInt() (int, bool) {
+	i, ok := <-p.ch
+	if !ok {
+		return 0, false
+	}
+	return i, true
+}
+
+func (p *pipe) PushInt(i int) {
+	p.lastInput = i
+	p.ch <- i
+}
+
+func part2Instance(phases ...int) (int, error) {
+	n := len(phases)
+	pipes := make([]*pipe, n)
+	amps := make([]*intcode.Computer, n)
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		pipes[i] = newPipe(i + 1)
+		amps[i] = intcode.NewComputer(parseInput(day7Input))
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		pipes[i].PushInt(phases[i])
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = amps[i].Run(pipes[i], pipes[(i+1)%n])
+		}(i)
+	}
+	pipes[0].PushInt(0)
+	wg.Wait()
+	for i, err := range errs {
+		if err != error(nil) {
+			return 0, fmt.Errorf("Amp #%d: %v", i+1, err)
+		}
+	}
+	for _, pipe := range pipes {
+		close(pipe.ch)
+	}
+	output := pipes[0].lastInput
+	return output, nil
+}
+
 func day7() {
-	fmt.Println(day7Instance(4, 3, 2, 1, 0))
+	fmt.Println(part1Instance(4, 3, 2, 1, 0))
 	fmt.Println(permutations([]int{1, 2, 3, 4}))
 	maxOutput := -1
 	for _, comb := range permutations([]int{0, 1, 2, 3, 4}) {
-		output, err := day7Instance(comb...)
+		output, err := part1Instance(comb...)
 		if err != nil {
 			panic(err.Error())
 		}
 		if output > maxOutput {
 			maxOutput = output
 			fmt.Println("Part 1:", output, comb)
+		}
+	}
+	fmt.Println(part2Instance(9, 8, 7, 6, 5))
+	for _, comb := range permutations([]int{5, 6, 7, 8, 9}) {
+		output, err := part2Instance(comb...)
+		if err != nil {
+			panic(err.Error())
+		}
+		if output > maxOutput {
+			maxOutput = output
+			fmt.Println("Part 2:", output, comb)
 		}
 	}
 }
