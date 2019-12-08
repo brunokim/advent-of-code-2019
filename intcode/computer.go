@@ -88,23 +88,24 @@ func decodeInstruction(instr int) (InstructionType, []ParamMode, error) {
 type Computer struct {
 	state              []int
 	instructionPointer int
-	inputs             []int
 	Debug              bool
 }
 
-func NewComputer(state []int, inputs ...int) *Computer {
-	return &Computer{state, 0, inputs, false}
-}
-
-func (c *Computer) consumeInput() int {
-	result := c.inputs[0]
-	c.inputs = c.inputs[1:]
-	return result
+func NewComputer(state []int) *Computer {
+	return &Computer{state, 0, false}
 }
 
 var halted = fmt.Errorf("Halted")
 
-func (c *Computer) step() error {
+type IntReader interface {
+	NextInt() (int, bool)
+}
+
+type IntWriter interface {
+	PushInt(i int)
+}
+
+func (c *Computer) step(in IntReader, out IntWriter) error {
 	ptr := c.instructionPointer
 	opcode, modes, err := decodeInstruction(c.state[ptr])
 	if err != nil {
@@ -133,9 +134,13 @@ func (c *Computer) step() error {
 	case Mul:
 		c.state[params[2]] = params[0] * params[1]
 	case Input:
-		c.state[params[0]] = c.consumeInput()
+		v, ok := in.NextInt()
+		if !ok {
+			return fmt.Errorf("Input exhausted @ %d", ptr)
+		}
+		c.state[params[0]] = v
 	case Output:
-		fmt.Println(params[0])
+		out.PushInt(params[0])
 	case JumpIfNonZero:
 		if params[0] != 0 {
 			c.instructionPointer = params[1]
@@ -165,9 +170,9 @@ func (c *Computer) step() error {
 	return nil
 }
 
-func (c *Computer) Run() error {
+func (c *Computer) Run(in IntReader, out IntWriter) error {
 	for {
-		err := c.step()
+		err := c.step(in, out)
 		if err == nil {
 			continue
 		}
@@ -178,3 +183,28 @@ func (c *Computer) Run() error {
 	}
 }
 
+type inout struct {
+	input  []int
+	output []int
+}
+
+func (s *inout) NextInt() (int, bool) {
+	if len(s.input) == 0 {
+		return 0, false
+	}
+	v := s.input[0]
+	s.input = s.input[1:]
+	return v, true
+}
+
+func (s *inout) PushInt(i int) {
+	s.output = append(s.output, i)
+}
+
+func (c *Computer) RunWith(input ...int) ([]int, error) {
+	s := &inout{input, nil}
+	if err := c.Run(s, s); err != nil {
+		return nil, err
+	}
+	return s.output, nil
+}
