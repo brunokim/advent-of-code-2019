@@ -86,12 +86,16 @@ func decodeInstruction(instr int) (InstructionType, []ParamMode, error) {
 }
 
 type Computer struct {
-	state              []int
+	state              map[int]int
 	instructionPointer int
 	Debug              bool
 }
 
-func NewComputer(state []int) *Computer {
+func NewComputer(program []int) *Computer {
+	state := make(map[int]int)
+	for i, instruction := range program {
+		state[i] = instruction
+	}
 	return &Computer{state, 0, false}
 }
 
@@ -120,7 +124,10 @@ func (c *Computer) step(in IntReader, out IntWriter) error {
 			value = c.state[value]
 		}
 		if mode == Immediate && expectedModes[i] == Address {
-			rawParams := c.state[ptr+1 : ptr+1+numParams]
+			rawParams := make([]int, numParams)
+			for i := 0; i < numParams; i++ {
+				rawParams[i] = c.state[ptr+1+i]
+			}
 			return fmt.Errorf("Unexpected immediate mode for param #%d @ %d (%s %v)", i+1, ptr, instructionNames[opcode], rawParams)
 		}
 		params[i] = value
