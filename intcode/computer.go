@@ -15,10 +15,11 @@ const (
 	JumpIfZero                    = 6
 	LessThan                      = 7
 	Equals                        = 8
+	OffsetRelBase                 = 9
 	Halt                          = 99
 )
 
-var instructionTypes = [...]InstructionType{Add, Mul, Input, Output, Halt, JumpIfNonZero, JumpIfZero, LessThan, Equals}
+var instructionTypes = [...]InstructionType{Add, Mul, Input, Output, Halt, JumpIfNonZero, JumpIfZero, LessThan, Equals, OffsetRelBase}
 var instructionNames = map[InstructionType]string{
 	Add:           "add",
 	Mul:           "mul",
@@ -28,6 +29,7 @@ var instructionNames = map[InstructionType]string{
 	JumpIfZero:    "jiz",
 	LessThan:      "<",
 	Equals:        "==",
+	OffsetRelBase: "base",
 	Halt:          "halt",
 }
 
@@ -36,6 +38,7 @@ type ParamMode int
 const (
 	Address ParamMode = iota
 	Immediate
+	Relative
 )
 
 var expectedParamModes = map[InstructionType][]ParamMode{
@@ -47,6 +50,7 @@ var expectedParamModes = map[InstructionType][]ParamMode{
 	JumpIfZero:    []ParamMode{Immediate, Immediate},
 	LessThan:      []ParamMode{Immediate, Immediate, Address},
 	Equals:        []ParamMode{Immediate, Immediate, Address},
+	OffsetRelBase: []ParamMode{Immediate},
 	Halt:          []ParamMode{},
 }
 
@@ -88,6 +92,7 @@ func decodeInstruction(instr int) (InstructionType, []ParamMode, error) {
 type Computer struct {
 	state              map[int]int
 	instructionPointer int
+	relativeBase       int
 	Debug              bool
 }
 
@@ -96,7 +101,12 @@ func NewComputer(program []int) *Computer {
 	for i, instruction := range program {
 		state[i] = instruction
 	}
-	return &Computer{state, 0, false}
+	return &Computer{
+		state:              state,
+		instructionPointer: 0,
+		relativeBase:       0,
+		Debug:              false,
+	}
 }
 
 var halted = fmt.Errorf("Halted")
@@ -107,6 +117,16 @@ type IntReader interface {
 
 type IntWriter interface {
 	PushInt(i int)
+}
+
+func (c *Computer) debugInstructions(numParams int) []int {
+	ptr := c.instructionPointer
+	rawParams := make([]int, numParams+1)
+	rawParams[0] = c.state[ptr]
+	for i := 1; i < numParams+1; i++ {
+		rawParams[i] = c.state[ptr+i]
+	}
+	return rawParams
 }
 
 func (c *Computer) step(in IntReader, out IntWriter) error {
@@ -120,20 +140,28 @@ func (c *Computer) step(in IntReader, out IntWriter) error {
 	params := make([]int, numParams)
 	for i, mode := range modes {
 		value := c.state[ptr+1+i]
-		if mode == Address && expectedModes[i] == Immediate {
-			value = c.state[value]
-		}
-		if mode == Immediate && expectedModes[i] == Address {
-			rawParams := make([]int, numParams)
-			for i := 0; i < numParams; i++ {
-				rawParams[i] = c.state[ptr+1+i]
+		expectedMode := expectedModes[i]
+		switch mode {
+		case Address:
+			if expectedMode == Immediate {
+				value = c.state[value]
 			}
-			return fmt.Errorf("Unexpected immediate mode for param #%d @ %d (%s %v)", i+1, ptr, instructionNames[opcode], rawParams)
+		case Relative:
+			switch expectedMode {
+			case Address:
+				value += c.relativeBase
+			case Immediate:
+				value = c.state[value+c.relativeBase]
+			}
+		case Immediate:
+			if expectedMode == Address {
+				return fmt.Errorf("Unexpected immediate mode for param #%d @ %d (%s %v)", i+1, ptr, instructionNames[opcode], c.debugInstructions(numParams))
+			}
 		}
 		params[i] = value
 	}
 	if c.Debug {
-		fmt.Printf("@%d: %s %v\n", ptr, instructionNames[opcode], params)
+		fmt.Printf("@%d: %s %v\t(%v/%d)\n", ptr, instructionNames[opcode], params, c.debugInstructions(numParams), c.relativeBase)
 	}
 	switch opcode {
 	case Add:
@@ -170,6 +198,8 @@ func (c *Computer) step(in IntReader, out IntWriter) error {
 			value = 1
 		}
 		c.state[params[2]] = value
+	case OffsetRelBase:
+		c.relativeBase += params[0]
 	case Halt:
 		return halted
 	}
