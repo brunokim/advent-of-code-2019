@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 )
 
@@ -86,6 +88,17 @@ func (s coordSet) toList() []coord {
 	return coords
 }
 
+func difference(s1, s2 coordSet) coordSet {
+	s := make(coordSet)
+	for p := range s1 {
+		if _, ok := s2[p]; ok {
+			continue
+		}
+		s[p] = struct{}{}
+	}
+	return s
+}
+
 func calcBoundingBox(coords []coord) boundingBox {
 	bbox := boundingBox{coords[0], coords[0]}
 	for _, p := range coords[1:] {
@@ -104,37 +117,71 @@ func withinBoundingBox(p coord, bbox boundingBox) bool {
 		p.y <= bbox.bottomRight.y
 }
 
-func day10Instance(input string) {
+func blockedFrom(station coord, asteroids coordSet, bbox boundingBox) coordSet {
+	s := newCoordSet()
+	for asteroid := range asteroids {
+		if asteroid == station {
+			continue
+		}
+		v := vector(station, asteroid)
+		p := add(asteroid, v)
+		for withinBoundingBox(p, bbox) {
+			if _, ok := asteroids[p]; ok {
+				s[p] = struct{}{}
+			}
+			p = add(p, v)
+		}
+	}
+	return s
+}
+
+func day10Instance(input string) []coord {
 	asteroids := newCoordSet(parseAsteroidMap(input)...)
 	asteroidList := asteroids.toList()
 	bbox := calcBoundingBox(asteroidList)
 	// fmt.Println(bbox, asteroidList)
-	blockedFrom := make(map[coord]coordSet)
+	blocked := make(map[coord]coordSet)
 	for a1 := range asteroids {
-		blockedFrom[a1] = newCoordSet()
-		for a2 := range asteroids {
-			if a1 == a2 {
-				continue
-			}
-			v := vector(a1, a2)
-			p := add(a2, v)
-			for withinBoundingBox(p, bbox) {
-				if _, ok := asteroids[p]; ok {
-					//	fmt.Printf("%v --> %v --> %v (vector: %v)\n", a1, a2, p, v)
-					blockedFrom[a1][p] = struct{}{}
-				}
-				p = add(p, v)
-			}
-		}
+		blocked[a1] = blockedFrom(a1, asteroids, bbox)
 	}
-	minBlockedPos := asteroidList[0]
-	for asteroid, blocked := range blockedFrom {
+	station := asteroidList[0]
+	for asteroid, invisible := range blocked {
 		//fmt.Println(asteroid, blocked.toList())
-		if len(blocked) < len(blockedFrom[minBlockedPos]) {
-			minBlockedPos = asteroid
+		if len(invisible) < len(blocked[station]) {
+			station = asteroid
 		}
 	}
-	fmt.Println("Part 1:", minBlockedPos, len(asteroids)-len(blockedFrom[minBlockedPos])-1)
+	fmt.Println("Part 1:", station, len(asteroids)-len(blocked[station])-1)
+	angle := func(p coord) float64 {
+		rad := math.Atan2(float64(p.y-station.y), float64(p.x-station.x))
+		deg := rad / math.Pi * 180
+		ang := deg + 90
+		if ang < 0 {
+			ang += 360
+		}
+		return ang
+	}
+	var destroyed []coord
+	remaining := make(coordSet)
+	for p := range asteroids {
+		if p == station {
+			continue
+		}
+		remaining[p] = struct{}{}
+	}
+	for i := 0; len(remaining) > 0 && i < 100; i++ {
+		blocked := blockedFrom(station, remaining, bbox)
+		visible := difference(remaining, blocked)
+		visibleList := visible.toList()
+		sort.Slice(visibleList, func(i, j int) bool {
+			a1, a2 := visibleList[i], visibleList[j]
+			return angle(a1) < angle(a2)
+		})
+		fmt.Printf("Iteration #%d: %d of %d destroyed\n", i+1, len(visible), len(remaining))
+		destroyed = append(destroyed, visibleList...)
+		remaining = blocked
+	}
+	return destroyed
 }
 
 func day10() {
@@ -142,7 +189,9 @@ func day10() {
 		fmt.Println("Test", i)
 		day10Instance(test)
 	}
-	day10Instance(day10Input)
+	destroyed := day10Instance(day10Input)
+	fmt.Println(destroyed[:15])
+	fmt.Println(destroyed[198:201])
 }
 
 var day10Tests = []string{
