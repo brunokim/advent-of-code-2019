@@ -1,6 +1,9 @@
 package main
 
-func main() {
-	day13()
-}
+import (
+	"brunokim.xyz/advent-of-code-2019/day15"
+)
 
+func main() {
+	day15.Run()
+}
