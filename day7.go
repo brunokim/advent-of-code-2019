@@ -10,7 +10,7 @@ import (
 func day7Part1Instance(phases ...int) (int, error) {
 	input := 0
 	for i, phase := range phases {
-		amp := intcode.NewComputer(parseInput(day7Input))
+		amp := intcode.NewComputer(intcode.ParseProgram(day7Input))
 		outputs, err := amp.RunWith(phase, input)
 		if err != nil {
 			return 0, fmt.Errorf("Amp %d: %v", i+1, err)
@@ -76,7 +76,7 @@ func day7Part2Instance(phases ...int) (int, error) {
 	errs := make([]error, n)
 	for i := 0; i < n; i++ {
 		pipes[i] = newPipe(i + 1)
-		amps[i] = intcode.NewComputer(parseInput(day7Input))
+		amps[i] = intcode.NewComputer(intcode.ParseProgram(day7Input))
 	}
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {

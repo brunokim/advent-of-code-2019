@@ -158,7 +158,7 @@ func (r *robot) PushInt(i int) {
 func day11() {
 	r := newRobot()
 	r.panels[r.pos] = 1
-	c := intcode.NewComputer(parseInput(day11Input))
+	c := intcode.NewComputer(intcode.ParseProgram(day11Input))
 	c.Run(r, r)
 	fmt.Println(len(r.panels))
 	fmt.Println(r)

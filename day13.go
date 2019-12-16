@@ -126,7 +126,7 @@ func (j *joystick) NextInt() (int, bool) {
 }
 
 func day13() {
-	input := parseInput(day13Input)
+	input := intcode.ParseProgram(day13Input)
 	// Part 1
 	c := intcode.NewComputer(input)
 	out, _ := c.RunWith()
